@@ -8,10 +8,10 @@ internal static class Program
     private static void Main(string[] args)
     {
         // One tray icon is enough; a second instance just confuses the status.
-        using var single = new Mutex(true, "Global\\AITeacherRadarTray", out var isFirst);
+        using var single = new Mutex(true, @"Global\AITeacherRadarTray", out var isFirst);
         if (!isFirst)
         {
-            MessageBox.Show("AI Teacher Radar is already running in the tray.",
+            MessageBox.Show("App already running in the system tray.",
                 "AI Teacher Radar", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -47,9 +47,15 @@ internal static class Program
             return;
         }
 
-        var openReports = args.Any(a =>
-            a.Equals("--reports", StringComparison.OrdinalIgnoreCase));
-        Application.Run(new TrayApp(cfg, openReports));
+        // The window opens on startup by default. --minimized suppresses it,
+        // which is what you want from the Startup folder; --reports forces it
+        // even if OpenWindowOnStartup has been turned off in the config.
+        var minimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)
+                                   || a.Equals("/minimized", StringComparison.OrdinalIgnoreCase));
+        var forced = args.Any(a => a.Equals("--reports", StringComparison.OrdinalIgnoreCase));
+        var openWindow = forced || (cfg.OpenWindowOnStartup && !minimized);
+
+        Application.Run(new TrayApp(cfg, openWindow));
     }
 
     private static bool DockerPresent()

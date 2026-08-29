@@ -19,7 +19,7 @@ public sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _miRestart = new("Restart");
     private readonly ToolStripMenuItem _miStatusLine = new("Polling…") { Enabled = false };
 
-    public TrayApp(AppConfig cfg, bool openReports = false)
+    public TrayApp(AppConfig cfg, bool openWindow = true)
     {
         _cfg = cfg;
         _client = new RadarClient(cfg);
@@ -70,7 +70,7 @@ public sealed class TrayApp : ApplicationContext
         _timer.Start();
 
         _ = PollAsync();
-        if (openReports) ShowReports();
+        if (openWindow) ShowReports();
     }
 
     private ToolStripMenuItem Job(string label, string kind) =>

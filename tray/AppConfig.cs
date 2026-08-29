@@ -75,6 +75,13 @@ public sealed class AppConfig
     public string EnvFile { get; set; } = Path.Combine(WritableRoot, ".env");
     public int PollSeconds { get; set; } = 5;
 
+    /// <summary>
+    /// Open the app window when the app starts. Off is useful when launching
+    /// from the Startup folder, where a window on every login is noise -
+    /// pass --minimized for that without changing this.
+    /// </summary>
+    public bool OpenWindowOnStartup { get; set; } = true;
+
     /// <summary>Notify on the transitions that actually matter, not every poll.</summary>
     public bool NotifyOnStateChange { get; set; } = true;
 

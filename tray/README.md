@@ -36,10 +36,25 @@ poll.
 - **Open API health** — `/health` in the browser
 - **Show status window** — double-clicking the tray icon does the same
 
+## Launching
+
+The app window opens on startup, so a double-click always shows something
+rather than silently placing a tray icon. Launching it a second time while it
+is already running reports *"App already running in the system tray."* and
+exits, leaving the original instance untouched.
+
+| Flag | Effect |
+|---|---|
+| *(none)* | Opens the window and sits in the tray |
+| `--minimized` | Tray only, no window — use this for a `shell:startup` shortcut, where a window on every login is noise |
+| `--reports` | Forces the window open even if `OpenWindowOnStartup` is false |
+
+`OpenWindowOnStartup` in `radartray.json` changes the default.
+
 ## Reports reader
 
-**Reports…** in the tray menu (or launch with `--reports`) opens a reader over
-everything the radar has written.
+**Reports…** in the tray menu opens a reader over everything the radar has
+written; it is also what the startup window shows.
 
 Left: every brief, newest first, grouped by day — with the weekly synthesis and
 each day's synthesis above that day's searches. Columns are `When` (slot time,
