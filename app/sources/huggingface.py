@@ -18,7 +18,10 @@ import time
 import httpx
 
 from .. import config
-from ..util import age_hours, fits_verdict, make_item, parse_date, vram_plan
+from ..util import (
+    age_hours, fits_verdict, make_item, output_learning_allowed, parse_date,
+    vram_plan,
+)
 
 log = logging.getLogger("radar.sources.hf")
 
@@ -36,6 +39,17 @@ _PERMISSIVE = ("apache-2.0", "mit", "bsd", "openrail", "llama3", "llama4",
                "gemma", "qwen", "cc-by-4.0")
 _CODE_HINTS = ("code", "coder", "program", "swe", "dev", "sql")
 _REASON_HINTS = ("reason", "think", "r1", "distill", "cot", "math", "o1")
+_OFFICIAL_ORGS = frozenset({
+    "qwen", "meta-llama", "google", "google-deepmind", "mistralai",
+    "deepseek-ai", "microsoft", "ibm-granite", "nvidia", "allenai",
+    "bigcode", "tiiuae", "01-ai", "internlm", "moonshotai", "zai-org",
+    "thudm", "baai", "huggingface", "facebook", "stabilityai",
+    "eleutherai", "openai",
+})
+_COMMUNITY = re.compile(
+    r"(?:^|[-_/\s])(merge|merged|mergekit|abliterat\w*|uncensor\w*|uncen|heretic)(?:$|[-_/\s])",
+    re.I,
+)
 
 
 def collect(cfg: dict) -> list[dict]:
@@ -86,12 +100,16 @@ def _models(conf: dict) -> list[dict]:
                 if _is_repackage(mid) and int(m.get("likes") or 0) < 25:
                     continue
 
-                fit, notes = _teacher_fitness(m, mid, params_b)
+                official = _is_official(mid)
+                community = _is_community(mid, m)
+                fit, notes = _teacher_fitness(
+                    m, mid, params_b, official=official, community=community)
                 downloads = int(m.get("downloads") or 0)
                 likes = int(m.get("likes") or 0)
                 # Brand-new repos have no downloads yet; do not punish them.
                 if downloads < 50 and likes < 3 and fit < 4:
                     continue
+                lic = _license(m)
 
                 out.append(make_item(
                     url=f"https://huggingface.co/{mid}",
@@ -102,8 +120,11 @@ def _models(conf: dict) -> list[dict]:
                     extra={
                         "source_weight": weight, "model_id": mid,
                         "params_b": params_b, "likes": likes, "downloads": downloads,
-                        "license": _license(m), "pipeline": m.get("pipeline_tag"),
+                        "license": lic, "pipeline": m.get("pipeline_tag"),
                         "teacher_fitness": fit, "teacher_notes": notes,
+                        "official_org": official,
+                        "community_variant": community,
+                        "output_learning_allowed": output_learning_allowed(lic),
                         "vram": vram_plan(params_b) if params_b else {},
                         "created_at": parse_date(m.get("createdAt")),
                     },
@@ -142,8 +163,20 @@ def _license(m: dict) -> str:
     return "unknown"
 
 
-def _teacher_fitness(m: dict, mid: str, params_b: float | None) -> tuple[int, list[str]]:
-    """0-10. High = worth downloading to generate training data for a coder student."""
+def _is_official(mid: str) -> bool:
+    owner = mid.split("/", 1)[0].lower()
+    return owner in _OFFICIAL_ORGS
+
+
+def _is_community(mid: str, m: dict) -> bool:
+    blob = f"{mid} {' '.join(str(t) for t in (m.get('tags') or []))}"
+    return bool(_COMMUNITY.search(blob))
+
+
+def _teacher_fitness(m: dict, mid: str, params_b: float | None, *,
+                     official: bool = False, community: bool = False
+                     ) -> tuple[int, list[str]]:
+    """0-10. High = worth reviewing as a teacher. Never a pull authorization."""
     text = f"{mid} {' '.join(str(t) for t in (m.get('tags') or []))}".lower()
     score = 0
     notes: list[str] = []
@@ -181,6 +214,12 @@ def _teacher_fitness(m: dict, mid: str, params_b: float | None) -> tuple[int, li
     if int(m.get("likes") or 0) >= 50:
         score += 1
         notes.append(f"{m.get('likes')} likes")
+    if official:
+        score += 2
+        notes.append("official/reviewed org")
+    if community:
+        score = min(score, 5)
+        notes.append("community merge/abliteration — fitness capped; not a reviewed teacher")
     return min(score, 10), notes
 
 

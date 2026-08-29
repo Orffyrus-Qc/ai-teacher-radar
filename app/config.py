@@ -38,13 +38,43 @@ def _csv(name: str) -> list[str]:
 TZ = os.getenv("TZ", "UTC")
 
 # --- LLM -------------------------------------------------------------------
+# Notes and synthesis use gpt-oss:20b when the GPU gate is idle. Never default
+# to qwen3.5:9b (Borg's LoRA student) or qwen3.8:27b (live search). GPU busy or
+# LLM_ENABLED=false → rule-based briefs.
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434").rstrip("/")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.5:9b")
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-oss:20b")
 LLM_SYNTHESIS_MODEL = os.getenv("LLM_SYNTHESIS_MODEL", "gpt-oss:20b")
 LLM_TIMEOUT_S = _i("LLM_TIMEOUT_S", 300)
 LLM_ENABLED = _b("LLM_ENABLED", True)
 LLM_THINK = _b("LLM_THINK", False)
 LLM_MAX_ITEMS = _i("LLM_MAX_ITEMS", 10)
+_RESERVED_LLM_PREFIXES = ("qwen3.5:9b", "qwen3.8:27b")
+
+
+def _reserved_llm(name: str) -> bool:
+    n = (name or "").strip().casefold()
+    return any(n == prefix or n.startswith(f"{prefix}-") for prefix in _RESERVED_LLM_PREFIXES)
+
+
+def notes_model() -> str | None:
+    """Model for per-item notes. Never the 9B student or 27B search model."""
+    if not LLM_ENABLED:
+        return None
+    candidate = (LLM_MODEL or "").strip()
+    if _reserved_llm(candidate):
+        candidate = (LLM_SYNTHESIS_MODEL or "").strip()
+    if not candidate or _reserved_llm(candidate):
+        return None
+    return candidate
+
+
+def own_llm_models() -> set[str]:
+    """Ollama tags that count as *our* radar models for the GPU gate.
+
+    The 9B student and 27B search model are foreign: if they are resident,
+    radar publishes a rule-based brief instead of fighting a train or chat.
+    """
+    return {m for m in (notes_model(), LLM_SYNTHESIS_MODEL) if m and not _reserved_llm(m)}
 
 # --- GPU gate --------------------------------------------------------------
 GPU_GATE_ENABLED = _b("GPU_GATE_ENABLED", True)

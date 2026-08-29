@@ -75,10 +75,14 @@ class Scorer:
         item["buckets"] = hits
         # Only something big enough to actually teach counts as a teacher; a
         # 1.5B fine-tune is a student, however many buzzwords are in its name.
+        # Community merges / abliterations never make the teacher shortlist.
         params = extra.get("params_b")
         big_enough = params is None or params >= 7
-        item["is_teacher"] = big_enough and (
-            bool(self.teacher.search(text)) or extra.get("teacher_fitness", 0) >= 6)
+        if extra.get("community_variant"):
+            item["is_teacher"] = False
+        else:
+            item["is_teacher"] = big_enough and (
+                bool(self.teacher.search(text)) or extra.get("teacher_fitness", 0) >= 6)
         return item
 
 

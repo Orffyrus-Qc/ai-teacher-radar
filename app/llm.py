@@ -12,9 +12,12 @@ from . import config
 log = logging.getLogger("radar.llm")
 
 
-def available() -> tuple[bool, str]:
+def available(model: str | None = None) -> tuple[bool, str]:
     if not config.LLM_ENABLED:
         return False, "LLM_ENABLED=false"
+    needed = [model] if model else [m for m in (config.notes_model(), config.LLM_SYNTHESIS_MODEL) if m]
+    if not needed:
+        return False, "no LLM model configured (student/search tags are reserved)"
     try:
         r = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=8.0,
                       headers={"User-Agent": config.USER_AGENT})
@@ -22,7 +25,7 @@ def available() -> tuple[bool, str]:
         tags = {m.get("name") for m in r.json().get("models") or []}
     except Exception as exc:  # noqa: BLE001
         return False, f"ollama unreachable: {type(exc).__name__}"
-    missing = [m for m in (config.LLM_MODEL, config.LLM_SYNTHESIS_MODEL) if m not in tags]
+    missing = [m for m in needed if m not in tags]
     if missing:
         return False, f"model(s) not pulled: {', '.join(missing)}"
     return True, "ok"
@@ -31,7 +34,7 @@ def available() -> tuple[bool, str]:
 def generate(prompt: str, *, model: str | None = None, system: str | None = None,
              num_ctx: int = 8192, temperature: float = 0.3,
              num_predict: int = 512) -> str | None:
-    model = model or config.LLM_MODEL
+    model = model or config.notes_model() or config.LLM_SYNTHESIS_MODEL
     payload = {
         "model": model,
         "prompt": prompt,
@@ -77,7 +80,8 @@ def generate(prompt: str, *, model: str | None = None, system: str | None = None
 def unload(model: str | None = None) -> None:
     """Release VRAM immediately so a queued ComfyUI/training job is not blocked
     waiting on an idle keep-alive window."""
-    for m in ({model} if model else {config.LLM_MODEL, config.LLM_SYNTHESIS_MODEL}):
+    targets = ({model} if model else config.own_llm_models())
+    for m in targets:
         try:
             r = httpx.post(f"{config.OLLAMA_BASE_URL}/api/generate",
                            json={"model": m, "prompt": "", "keep_alive": 0},

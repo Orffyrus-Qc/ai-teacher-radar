@@ -32,8 +32,11 @@ out/
 
 Every file has YAML front matter, so the folder drops straight into Obsidian.
 
-Each brief is sectioned as: **TL;DR → Teacher-model watch → Training /
-distillation tooling → Research → Other signals → Source health**.
+Each brief is sectioned as: **inventory counts → TL;DR → Teacher-model
+watch → Student-model watch → Training / distillation tooling → Research →
+Noise / off-list → Source health**. A `*-search.json` sidecar sits next to
+each Markdown brief (url, license, params, fitness, buckets, role,
+`output_learning_allowed`) so Borg can ingest structured items.
 
 The *Teacher-model watch* section is the point of the whole thing: new Hugging
 Face models scored **0–10 for teacher fitness**, with a VRAM plan at fp16/Q8/Q5/Q4
@@ -213,6 +216,7 @@ Only one job runs at a time. Parallelism would defeat the point.
 | `GET` | `/queue` | What is waiting and why |
 | `GET` | `/runs` | Run history with GPU wait times |
 | `GET` | `/latest?kind=daily` | Most recent Markdown, as text |
+| `GET` | `/latest?kind=search&format=json` | Latest search sidecar JSON |
 
 Run one now:
 
@@ -243,10 +247,12 @@ so the cheap filter decides what is even worth a token.
 
 ### Models used
 
-`LLM_MODEL` (default `qwen3.5:9b`) writes the per-item "why this matters" lines.
-`LLM_SYNTHESIS_MODEL` (default `gpt-oss:20b`) writes the daily and weekly
-syntheses. Both are unloaded (`keep_alive: 0`) the moment a run finishes so a
-queued render is not blocked by an idle model squatting on VRAM.
+`LLM_MODEL` and `LLM_SYNTHESIS_MODEL` default to `gpt-oss:20b` and write notes
+only when the GPU gate is idle. They never default to `qwen3.5:9b` (Borg's LoRA
+student) or `qwen3.8:27b` (live search): if `.env` still names those tags, radar
+remaps to `gpt-oss:20b` or publishes a rule-based brief. Both are unloaded
+(`keep_alive: 0`) the moment a run finishes so a queued render or train is not
+blocked. LLM actions are **review** or **ignore** — never download or pull.
 
 Set `LLM_ENABLED=false` for a zero-GPU deployment: you still get harvesting,
 scoring, dedup and rule-based briefs.

@@ -105,7 +105,7 @@ def _probe_ollama(st: GpuStatus) -> None:
     if not config.OLLAMA_PS_GATE:
         st.probes["ollama"] = "disabled"
         return
-    ours = {config.LLM_MODEL, config.LLM_SYNTHESIS_MODEL}
+    ours = config.own_llm_models()
     try:
         r = httpx.get(f"{config.OLLAMA_BASE_URL}/api/ps", timeout=6.0,
                       headers={"User-Agent": config.USER_AGENT})

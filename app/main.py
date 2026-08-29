@@ -1,11 +1,12 @@
 """HTTP surface. n8n drives it; you can drive it too with curl."""
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from . import config, gpu, jobs, llm, render, scheduler, store
@@ -45,7 +46,8 @@ def health():
         "scheduler_mode": config.SCHEDULER_MODE,
         "slots": config.SEARCH_SLOTS,
         "llm": {"enabled": config.LLM_ENABLED, "ready": ok, "detail": why,
-                "model": config.LLM_MODEL, "synthesis_model": config.LLM_SYNTHESIS_MODEL},
+                "model": config.notes_model() or "(rule-based)",
+                "synthesis_model": config.LLM_SYNTHESIS_MODEL},
         "worker": jobs.live(),
         "upcoming": scheduler.upcoming(),
     }
@@ -110,13 +112,26 @@ def runs(limit: int = Query(25, ge=1, le=200)):
     return {"runs": store.recent_runs(limit)}
 
 
-@api.get("/latest", response_class=PlainTextResponse)
-def latest(kind: str = Query("search", pattern="^(search|daily|weekly)$")):
-    """The most recent Markdown output, as plain text."""
+@api.get("/latest")
+def latest(kind: str = Query("search", pattern="^(search|daily|weekly)$"),
+           fmt: str = Query("md", alias="format", pattern="^(md|json)$")):
+    """The most recent Markdown brief, or the search sidecar as JSON."""
     root = config.OUT_DIR / ("weekly" if kind == "weekly" else "daily")
     pattern = "*.md" if kind == "weekly" else (
         "*/SYNTHESIS.md" if kind == "daily" else "*/*-search.md")
     files = sorted(root.glob(pattern))
     if not files:
         raise HTTPException(status_code=404, detail=f"no {kind} output yet")
-    return files[-1].read_text(encoding="utf-8")
+    path = files[-1]
+    if fmt == "json":
+        sidecar = path.with_suffix(".json")
+        if not sidecar.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="no JSON sidecar yet; only search briefs emit one",
+            )
+        try:
+            return JSONResponse(json.loads(sidecar.read_text(encoding="utf-8")))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return PlainTextResponse(path.read_text(encoding="utf-8"))

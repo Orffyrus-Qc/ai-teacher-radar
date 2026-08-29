@@ -48,7 +48,8 @@ def _themes(items: list[dict], top: int = 6) -> list[tuple[str, int]]:
 
 
 def _teacher_table(items: list[dict], limit: int = 10) -> list[str]:
-    models = [i for i in items if i["source_kind"] == "model"]
+    models = [i for i in items if i["source_kind"] == "model"
+              and not (i.get("extra") or {}).get("community_variant")]
     models.sort(key=lambda i: i["extra"].get("teacher_fitness", 0), reverse=True)
     if not models:
         return ["*No new teacher candidates appeared.*", ""]
@@ -89,8 +90,8 @@ def run_daily(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | None
         "released, and by whom. Reporting voice, not a to-do log)\n"
         "### For the distillation pipeline\n(what to change in how I generate "
         "training data, pick a teacher, or run SFT/RL - be specific, cite item titles)\n"
-        "### Download / install shortlist\n(concrete artefacts worth pulling today, "
-        "or 'nothing today')\n"
+        "### Review shortlist\n(concrete artefacts worth reviewing today — never "
+        "say download, pull, or install — or 'nothing today')\n"
         "### Skip\n(what looked interesting but is not worth your time, one line each)",
         use_llm)
 
