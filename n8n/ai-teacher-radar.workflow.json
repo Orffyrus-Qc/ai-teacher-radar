@@ -1,0 +1,376 @@
+{
+  "id": "aiTeacherRadar01",
+  "name": "AI Teacher Radar",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6,12,18,23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger-search",
+      "name": "4x daily search",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger-daily",
+      "name": "Daily synthesis 23:40",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 23 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "trigger-weekly",
+      "name": "Weekly synthesis Sun 23:55",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -460,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://ai-teacher-radar:8791/gpu",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "check-gpu",
+      "name": "Check GPU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "slot",
+              "name": "slot",
+              "type": "string",
+              "value": "={{ $now.toFormat('HH:mm') }}"
+            },
+            {
+              "id": "gpu_busy",
+              "name": "gpu_busy",
+              "type": "boolean",
+              "value": "={{ $json.busy === true }}"
+            },
+            {
+              "id": "gpu_summary",
+              "name": "gpu_summary",
+              "type": "string",
+              "value": "={{ $json.summary || 'gpu endpoint unreachable' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "build-context",
+      "name": "Build context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-teacher-radar:8791/jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Radar-Origin",
+              "value": "n8n"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: 'search', slot: $json.slot }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "enqueue-search",
+      "name": "Enqueue search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-deferred",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.gpu_busy_at_submit }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-deferred",
+      "name": "GPU busy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "report",
+              "name": "report",
+              "type": "string",
+              "value": "=DEFERRED \u2014 {{ $json.gpu }}. Job {{ $json.job.id }} harvested now; the written brief publishes when the GPU frees. Watch: http://127.0.0.1:8791/queue"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "report-deferred",
+      "name": "Report deferral",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        -110
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "report",
+              "name": "report",
+              "type": "string",
+              "value": "=RUNNING \u2014 job {{ $json.job.id }} started immediately (GPU idle)."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "report-running",
+      "name": "Report running",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        660,
+        110
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-teacher-radar:8791/jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Radar-Origin",
+              "value": "n8n"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: 'daily' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "enqueue-daily",
+      "name": "Enqueue daily synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-teacher-radar:8791/jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Radar-Origin",
+              "value": "n8n"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: 'weekly' }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "enqueue-weekly",
+      "name": "Enqueue weekly synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "4x daily search": {
+      "main": [
+        [
+          {
+            "node": "Check GPU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check GPU": {
+      "main": [
+        [
+          {
+            "node": "Build context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build context": {
+      "main": [
+        [
+          {
+            "node": "Enqueue search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue search": {
+      "main": [
+        [
+          {
+            "node": "GPU busy?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPU busy?": {
+      "main": [
+        [
+          {
+            "node": "Report deferral",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily synthesis 23:40": {
+      "main": [
+        [
+          {
+            "node": "Enqueue daily synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly synthesis Sun 23:55": {
+      "main": [
+        [
+          {
+            "node": "Enqueue weekly synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "pinData": {},
+  "active": false
+}

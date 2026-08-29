@@ -1,0 +1,10 @@
+.env
+data/
+out/
+__pycache__/
+*.pyc
+installer/*.msi
+installer/*.wixpdb
+tray/bin/
+tray/obj/
+tray/publish/

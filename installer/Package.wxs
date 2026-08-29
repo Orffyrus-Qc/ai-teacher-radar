@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    Per-machine MSI for AI Teacher Radar.
+
+    Ships the tray app plus the radar's source (Dockerfile, app/, config/) —
+    roughly half a megabyte. The 277 MB container image is deliberately NOT in
+    the package: it is built on the target from the shipped Dockerfile the first
+    time you press Start, which needs the same internet connection you will need
+    anyway to pull the Ollama models.
+
+    Everything writable (briefs, SQLite store, .env, radartray.json) lives under
+    %LOCALAPPDATA%\AITeacherRadar, so the install folder stays read-only and the
+    app needs no elevation after setup.
+  -->
+
+  <Package
+      Name="AI Teacher Radar"
+      Manufacturer="AI Teacher Radar"
+      Version="1.0.0.0"
+      UpgradeCode="77c24bf3-d898-46c3-b56d-41a65fe05e4e"
+      Scope="perMachine"
+      Compressed="yes">
+
+    <SummaryInformation Description="Local AI model-training news radar, with a tray monitor" />
+
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of AI Teacher Radar is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="RadarIcon" SourceFile="..\tray\appicon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="RadarIcon" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="AI Teacher Radar" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="AI Teacher Radar" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="AI Teacher Radar" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="RootFiles" />
+      <ComponentGroupRef Id="PythonApp" />
+      <ComponentGroupRef Id="ConfigFiles" />
+      <ComponentGroupRef Id="N8nFiles" />
+      <ComponentGroupRef Id="DocFiles" />
+      <ComponentGroupRef Id="ScriptFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <Feature Id="DesktopShortcut" Title="Desktop shortcut" Level="1">
+      <ComponentGroupRef Id="DesktopShortcutGroup" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+  </Package>
+
+  <Fragment>
+    <!-- Files the compose build context needs, at the install root. -->
+    <ComponentGroup Id="RootFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\tray\publish\RadarTray.exe" />
+      <Files Include="..\docker-compose.yml" />
+      <Files Include="..\docker-compose.n8n.yml" />
+      <Files Include="..\Dockerfile" />
+      <Files Include="..\requirements.txt" />
+      <Files Include="..\.env.example" />
+      <Files Include="..\README.md" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="PythonApp" Directory="INSTALLFOLDER" Subdirectory="app">
+      <!--
+        Recursive include with no Exclude: WiX resolves an Exclude pattern by
+        enumerating the directory before the last separator, so "**" in the
+        middle of a path is not a valid exclusion. Nothing needs excluding
+        anyway - Python bytecode is only ever produced inside the container.
+      -->
+      <Files Include="..\app\**" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="ConfigFiles" Directory="INSTALLFOLDER" Subdirectory="config">
+      <Files Include="..\config\*.yaml" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="N8nFiles" Directory="INSTALLFOLDER" Subdirectory="n8n">
+      <Files Include="..\n8n\*.json" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="DocFiles" Directory="INSTALLFOLDER" Subdirectory="docs">
+      <Files Include="..\docs\*.md" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="ScriptFiles" Directory="INSTALLFOLDER" Subdirectory="scripts">
+      <Files Include="..\scripts\*.ps1" />
+      <Files Include="Setup.ps1" />
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Shortcuts" Directory="AppMenuFolder">
+      <Component Id="StartMenuShortcuts" Guid="9e68177a-ba68-425d-89c3-8beddd927442">
+        <Shortcut Id="AppShortcut"
+                  Name="AI Teacher Radar"
+                  Description="Start, stop and monitor the AI Teacher Radar"
+                  Target="[INSTALLFOLDER]RadarTray.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="RadarIcon" />
+        <Shortcut Id="ReportsShortcut"
+                  Name="AI Teacher Radar Reports"
+                  Description="Read the search briefs and syntheses"
+                  Target="[INSTALLFOLDER]RadarTray.exe"
+                  Arguments="--reports"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="RadarIcon" />
+        <Shortcut Id="SetupShortcut"
+                  Name="Check prerequisites"
+                  Description="Verify Docker, GPU and Ollama on this machine"
+                  Target="[System64Folder]WindowsPowerShell\v1.0\powershell.exe"
+                  Arguments="-NoProfile -ExecutionPolicy Bypass -NoExit -File &quot;[INSTALLFOLDER]scripts\Setup.ps1&quot;"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKMU" Key="Software\AITeacherRadar"
+                       Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="DesktopShortcutGroup" Directory="DesktopFolder">
+      <Component Id="DesktopShortcutComponent" Guid="a8f57870-5f86-4a65-8d76-8c7b4ed2fce3">
+        <Shortcut Id="DesktopAppShortcut"
+                  Name="AI Teacher Radar"
+                  Description="Start, stop and monitor the AI Teacher Radar"
+                  Target="[INSTALLFOLDER]RadarTray.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="RadarIcon" />
+        <RegistryValue Root="HKMU" Key="Software\AITeacherRadar"
+                       Name="Desktop" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

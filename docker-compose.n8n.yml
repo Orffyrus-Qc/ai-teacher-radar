@@ -1,0 +1,22 @@
+# Optional override: joins the radar to an existing n8n container's network so
+# n8n can reach it at http://ai-teacher-radar:8791 with no host round-trip.
+#
+# Applied only when that network actually exists - an external network that is
+# absent makes `docker compose up` fail outright ("declared as external, but
+# could not be found"), which would break a fresh install on a machine with no
+# n8n. RadarTray checks with `docker network inspect` before including this
+# file; add it by hand with:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.n8n.yml up -d
+#
+# Set N8N_NETWORK in your .env if your n8n uses a different network name.
+services:
+  ai-teacher-radar:
+    networks:
+      - n8n
+      - default
+
+networks:
+  n8n:
+    external: true
+    name: ${N8N_NETWORK:-n8n_default}

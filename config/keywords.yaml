@@ -1,0 +1,88 @@
+# Bucket -> {weight, terms}. Matching is case-insensitive on title+summary.
+# An item's raw score is the sum of matched bucket weights (each bucket counts
+# at most once), multiplied by source weight and a recency factor.
+
+buckets:
+  distillation:
+    weight: 3.0
+    terms: [distillation, distilled, distill, "teacher model", "student model",
+            "teacher-student", "logit matching", "on-policy distillation",
+            "sequence-level distillation", "dark knowledge", "context distillation"]
+
+  training_method:
+    weight: 2.5
+    terms: [fine-tuning, finetuning, "fine-tune", sft, "supervised fine",
+            lora, qlora, dora, peft, "continual pretraining", "continued pretraining",
+            "instruction tuning", "preference optimization", dpo, orpo, kto, simpo,
+            grpo, rlhf, rlaif, rlvr, "verifiable reward", ppo, "reward model",
+            "curriculum learning", "self-play", "self-improvement", "self-taught",
+            "rejection sampling", "best-of-n", "process reward"]
+
+  data:
+    weight: 2.5
+    terms: ["synthetic data", "data generation", "data curation", "data mixture",
+            "dataset distillation", "instruction data", "trace data", rollout,
+            "agent trajectories", "execution feedback", "unit test feedback",
+            "self-instruct", evol-instruct, "textbook quality"]
+
+  model_surgery:
+    weight: 2.0
+    terms: ["model merging", "model soup", ties-merging, dare, slerp, "task arithmetic",
+            pruning, sparsification, "depth pruning", "width pruning", "layer removal",
+            upcycling, "mixture of experts", moe, "expert merging", "weight averaging",
+            "model editing", rebuild, rebuilding]
+
+  efficiency:
+    weight: 1.5
+    terms: [quantization, gguf, awq, gptq, exl2, qat, "quantization aware",
+            bitnet, "1-bit", int4, fp8, "kv cache", "speculative decoding",
+            "flash attention", "memory efficient", "gradient checkpointing", unsloth]
+
+  coder:
+    weight: 2.5
+    terms: ["code model", coder, "code llm", "code generation", "program synthesis",
+            "swe-bench", humaneval, mbpp, livecodebench, bigcodebench, evalplus,
+            "repo-level", "agentic coding", "code review model", "sandbox execution",
+            aider, "code completion"]
+
+  eval:
+    weight: 1.5
+    terms: [benchmark, "eval harness", "llm-as-judge", "llm as a judge", leaderboard,
+            contamination, "held-out", lm-eval, "evaluation suite"]
+
+  tooling:
+    weight: 2.0
+    terms: [axolotl, "llama-factory", llamafactory, torchtune, trl, verl, openrlhf,
+            distilabel, "open-instruct", megatron, deepspeed, fsdp, accelerate,
+            "training framework", "post-training", nemo, oumi, ms-swift]
+
+  release:
+    weight: 2.0
+    terms: ["open weights", "open-source model", "model release", "released the weights",
+            "apache 2.0", "mit license", checkpoint, "base model", "instruct model"]
+
+# Items whose text matches any of these are dropped before scoring.
+exclude:
+  - "stock price"
+  - "earnings call"
+  - "lawsuit"
+  - crypto
+  - nft
+  - "we are hiring"
+  - "now hiring"
+
+# Terms that specifically mark an item as relevant to building a *teacher*
+# for a local coder model. Drives the "Teacher-Model Watch" section.
+teacher_signals:
+  - distillation
+  - "teacher model"
+  - "synthetic data"
+  - "code model"
+  - coder
+  - "reasoning traces"
+  - grpo
+  - rlvr
+  - "open weights"
+  - unsloth
+  - axolotl
+  - "llama-factory"

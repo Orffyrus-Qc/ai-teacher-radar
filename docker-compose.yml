@@ -1,0 +1,32 @@
+services:
+  ai-teacher-radar:
+    build: .
+    image: ai-teacher-radar:latest
+    container_name: ai-teacher-radar
+    restart: unless-stopped
+    # Optional so a fresh install works before anything is tuned; RadarTray
+    # generates one under %LOCALAPPDATA%\AITeacherRadar and passes --env-file.
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      # Host-side access / manual triggering.
+      - "127.0.0.1:8791:8791"
+    volumes:
+      # Absolute paths on an installed machine (Program Files is read-only);
+      # the ./ defaults keep a dev checkout working unchanged.
+      - ${RADAR_OUT_DIR:-./out}:/app/out
+      - ${RADAR_DATA_DIR:-./data}:/app/data
+      - ./config:/app/config:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Gives the container a real nvidia-smi so GPU gating uses true telemetry.
+    # Comment this block out if the NVIDIA container runtime is unavailable;
+    # the ComfyUI + Ollama probes keep working on their own.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
