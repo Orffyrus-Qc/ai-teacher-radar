@@ -50,6 +50,15 @@ are listed left, newest first; the rendered Markdown is on the right with
 clickable links, and the bottom strip carries the file you are reading plus the
 live radar state.
 
+### The tray menu
+
+Everything is driven from here. The greyed first line is the live radar state,
+the same one the icon colour encodes. **Open app window** and double-clicking
+the icon both open the reader; the diagnostics dashboard is deliberately a
+separate, clearly-labelled entry.
+
+![Tray menu](docs/screenshots/07-tray-menu.png)
+
 ### Weekly synthesis
 
 Trends are only called out when at least two independent items back them, and
