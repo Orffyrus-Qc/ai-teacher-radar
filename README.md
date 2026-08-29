@@ -43,6 +43,59 @@ what to download and why.
 
 ---
 
+## What it looks like
+
+Everything below is real output from a single day's runs — no mock-ups. Briefs
+are listed left, newest first; the rendered Markdown is on the right with
+clickable links, and the bottom strip carries the file you are reading plus the
+live radar state.
+
+### Weekly synthesis
+
+Trends are only called out when at least two independent items back them, and
+anything with a single item behind it gets named as hype rather than quietly
+dropped. The *Teacher strategy* section reasons about what actually fits the
+hardware.
+
+![Weekly synthesis](docs/screenshots/01-weekly-synthesis.png)
+
+### Teacher-model shortlist
+
+Every candidate scored 0–10 for teacher fitness, with the VRAM verdict computed
+from the parameter count rather than asserted — "needs both cards (split) at Q4"
+versus "runs at Q8 on the 16 GB card" — plus the licence, because several strong
+open-weight models restrict training on their outputs.
+
+![Teacher-model shortlist](docs/screenshots/02-teacher-model-shortlist.png)
+
+### A scheduled search brief
+
+Each run opens with a TL;DR that names concrete actions, including what to
+ignore, then the teacher-model watch with the full VRAM plan per model.
+
+![Search brief](docs/screenshots/03-search-brief-tldr.png)
+
+### Training and distillation tooling
+
+New and updated frameworks, each with a one-line verdict on whether it is a
+technique to copy, a tool to install, or noise.
+
+![Training and distillation tooling](docs/screenshots/04-training-tooling.png)
+
+### Research
+
+Papers from arXiv and HF Daily Papers, scored and bucketed. Off-beat hits are
+labelled as noise rather than padded out.
+
+![Research](docs/screenshots/05-research.png)
+
+### Other signals
+
+Everything else above threshold — models better suited as students than
+teachers, community benchmarks, and the rest.
+
+![Other signals](docs/screenshots/06-other-signals.png)
+
 ## Install
 
 ```bash
