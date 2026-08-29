@@ -32,9 +32,15 @@ poll.
 - **Run now →** Search · Daily synthesis · Weekly synthesis (posts to `/jobs`;
   the balloon repeats the API's own GPU note, so you learn immediately whether
   it started or was deferred)
+- **Open app window** — the reports reader; double-clicking the tray icon does
+  the same, so opening from the tray and from the desktop always give you the
+  same interface
 - **Open briefs folder** — the `out/` directory
 - **Open API health** — `/health` in the browser
-- **Show status window** — double-clicking the tray icon does the same
+- **Radar status (diagnostics)…** — the separate troubleshooting dashboard
+  (container status, per-GPU bars, next scheduled runs). Deliberately not what
+  the tray icon opens: two different-looking windows for "open the app" reads
+  as two different builds.
 
 ## Launching
 
@@ -60,6 +66,10 @@ Left: every brief, newest first, grouped by day — with the weekly synthesis an
 each day's synthesis above that day's searches. Columns are `When` (slot time,
 `day`, or the ISO week), `Kind`, and item count, colour-coded by kind. The filter
 box matches date, kind or title.
+
+The bottom strip shows which file you are reading on the left and the live
+radar state on the right — colour-coded on the same scale as the tray icon — so
+this one window covers both reading and monitoring.
 
 Right: the Markdown, rendered — headings, bold/italic, inline code, bullets,
 tables laid out monospaced, and **clickable links** that open in your browser.

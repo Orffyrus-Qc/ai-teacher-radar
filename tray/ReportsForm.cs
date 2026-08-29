@@ -17,6 +17,7 @@ public sealed class ReportsForm : Form
     private readonly MarkdownView _view = new();
     private readonly TextBox _filter = new();
     private readonly Label _status = new();
+    private readonly Label _state = new();
     private readonly FileSystemWatcher? _watcher;
     private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 900 };
 
@@ -87,13 +88,26 @@ public sealed class ReportsForm : Form
         _split.Panel1.Controls.Add(_list);
         _split.Panel2.Controls.Add(_view);
 
-        _status.Dock = DockStyle.Bottom;
-        _status.Height = 22;
+        // One strip at the bottom: what you are reading on the left, what the
+        // radar is doing on the right, so this window alone tells you both.
+        var strip = new Panel { Dock = DockStyle.Bottom, Height = 22, BackColor = Bg };
+
+        _state.Dock = DockStyle.Right;
+        _state.Width = 260;
+        _state.TextAlign = ContentAlignment.MiddleRight;
+        _state.ForeColor = Color.FromArgb(150, 160, 172);
+        _state.Padding = new Padding(0, 0, 12, 0);
+        _state.Text = "connecting…";
+
+        _status.Dock = DockStyle.Fill;
         _status.TextAlign = ContentAlignment.MiddleLeft;
         _status.ForeColor = Color.FromArgb(150, 160, 172);
         _status.Padding = new Padding(10, 0, 0, 0);
 
-        Controls.AddRange([_split, _status, bar]);
+        strip.Controls.Add(_status);
+        strip.Controls.Add(_state);
+
+        Controls.AddRange([_split, strip, bar]);
 
         // A run finishing mid-read should show up without a manual refresh.
         try
@@ -149,6 +163,13 @@ public sealed class ReportsForm : Form
         };
         b.FlatAppearance.BorderColor = Color.FromArgb(70, 78, 88);
         return b;
+    }
+
+    /// <summary>Live radar state, pushed in by the tray on each poll.</summary>
+    public void SetState(string headline, Color colour)
+    {
+        _state.Text = headline;
+        _state.ForeColor = colour;
     }
 
     public void Reload()

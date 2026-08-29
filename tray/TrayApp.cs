@@ -39,13 +39,13 @@ public sealed class TrayApp : ApplicationContext
         run.DropDownItems.Add(Job("Weekly synthesis", "weekly"));
         menu.Items.Add(run);
 
-        menu.Items.Add(new ToolStripMenuItem("Reports…", null, (_, _) => ShowReports())
+        menu.Items.Add(new ToolStripMenuItem("Open app window", null, (_, _) => ShowReports())
         { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(new ToolStripMenuItem("Open briefs folder", null,
             (_, _) => OpenPath(_cfg.OutputFolder)));
         menu.Items.Add(new ToolStripMenuItem("Open API health", null,
             (_, _) => OpenPath($"{_cfg.BaseUrl}/health")));
-        menu.Items.Add(new ToolStripMenuItem("Show status window", null,
+        menu.Items.Add(new ToolStripMenuItem("Radar status (diagnostics)…", null,
             (_, _) => ShowStatus()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => Exit()));
@@ -61,7 +61,9 @@ public sealed class TrayApp : ApplicationContext
             Visible = true,
             ContextMenuStrip = menu
         };
-        _tray.DoubleClick += (_, _) => ShowStatus();
+        // Opening from the tray must give the same window as launching the
+        // app; two different-looking windows read as two different builds.
+        _tray.DoubleClick += (_, _) => ShowReports();
         // A "run finished" balloon is an invitation to read the brief.
         _tray.BalloonTipClicked += (_, _) => ShowReports();
 
@@ -133,6 +135,7 @@ public sealed class TrayApp : ApplicationContext
             _miRestart.Enabled = status.State != RadarState.Stopped;
 
             if (_form.Visible) _form.Render(status);
+            if (_reports.Visible) _reports.SetState(status.Headline, IconFactory.ColorFor(status.State));
 
             if (_cfg.NotifyOnStateChange && _lastState != RadarState.Unknown
                 && status.State != _lastState)
