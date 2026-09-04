@@ -50,11 +50,18 @@ LLM_ENABLED = _b("LLM_ENABLED", True)
 LLM_THINK = _b("LLM_THINK", False)
 LLM_MAX_ITEMS = _i("LLM_MAX_ITEMS", 10)
 _RESERVED_LLM_PREFIXES = ("qwen3.5:9b", "qwen3.8:27b")
+# Whole families Borg owns, matched on the name before the tag: it publishes
+# the same weights under its own label (borg-search:qwen3.8-27b), which the
+# tag-prefix rule above would not catch.
+_RESERVED_LLM_FAMILIES = ("borg-search",)
 
 
 def _reserved_llm(name: str) -> bool:
     n = (name or "").strip().casefold()
-    return any(n == prefix or n.startswith(f"{prefix}-") for prefix in _RESERVED_LLM_PREFIXES)
+    if any(n == prefix or n.startswith(f"{prefix}-") for prefix in _RESERVED_LLM_PREFIXES):
+        return True
+    family = n.split(":", 1)[0]
+    return family in _RESERVED_LLM_FAMILIES
 
 
 def is_reserved_llm(name: str | None) -> bool:

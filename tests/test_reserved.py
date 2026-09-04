@@ -43,6 +43,18 @@ class ReservedModels(unittest.TestCase):
     def test_variants_of_a_reserved_model_are_also_reserved(self):
         self.assertTrue(config.is_reserved_llm("qwen3.5:9b-borg-lora"))
 
+    def test_borg_search_family_is_reserved(self):
+        # Borg republishes the search model under its own label, so the
+        # tag-prefix rule alone would miss it.
+        self.assertTrue(config.is_reserved_llm("borg-search:qwen3.8-27b"))
+        self.assertTrue(config.is_reserved_llm("borg-search:latest"))
+        self.assertTrue(config.is_reserved_llm("BORG-SEARCH:Qwen3.8-27B"))
+
+    def test_a_lookalike_name_is_not_reserved(self):
+        # Only the exact family, not anything merely containing it.
+        self.assertFalse(config.is_reserved_llm("borg-searcher:7b"))
+        self.assertFalse(config.is_reserved_llm("my-borg-search:7b"))
+
     def test_ordinary_models_are_allowed(self):
         for name in ("gpt-oss:20b", "qwen2.5-coder:14b", "gemma4:e4b"):
             self.assertFalse(config.is_reserved_llm(name), name)
