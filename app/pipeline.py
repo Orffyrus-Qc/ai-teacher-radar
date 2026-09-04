@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from . import config, llm, render, score, sources, store
+from . import config, downloads, leaks, llm, render, score, sources, store
 from .util import assign_roles
 
 log = logging.getLogger("radar.pipeline")
@@ -38,7 +38,14 @@ def harvest(run_id: str) -> dict:
     deduped = score.dedupe(relevant)
     deduped.sort(key=lambda i: i["score"], reverse=True)
 
-    new_count = store.upsert_items(deduped, run_id)
+    corroborated = leaks.corroborated_leaks(scored)
+    for item in deduped:
+        leaks.stamp(item, corroborated)
+
+    new_count, fresh = store.upsert_items(deduped, run_id)
+    queued = downloads.consider(fresh)
+    if queued:
+        log.info("leak-watch %d new download row(s)", len(queued))
     log.info("kept %d relevant (%d new)", len(deduped), new_count)
 
     return {"items": deduped, "report": report, "new_count": new_count,
@@ -46,12 +53,15 @@ def harvest(run_id: str) -> dict:
 
 
 def publish(state: dict, *, run_id: str, slot: str, use_llm: bool,
-            gpu_note: str) -> Path:
-    """Enrich (optionally) and write the Markdown brief plus JSON sidecar."""
+            gpu_note: str, model: str | None = None) -> Path:
+    """Enrich (optionally) and write the Markdown brief plus JSON sidecar.
+
+    `model` overrides the configured notes model for this run only.
+    """
     items = state["items"]
     assign_roles(items)
     llm_state = "skipped"
-    note_model = config.notes_model() if use_llm else None
+    note_model = (model or config.notes_model()) if use_llm else None
 
     if note_model:
         ok, why = llm.available(model=note_model)

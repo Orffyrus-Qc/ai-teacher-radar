@@ -12,7 +12,10 @@ public sealed class TrayApp : ApplicationContext
     private readonly ReportsForm _reports;
 
     private RadarState _lastState = RadarState.Unknown;
+    private bool _modelsLoaded;
     private bool _polling;
+    private bool _notifyDownloads;
+    private readonly HashSet<string> _seenDownloads = [];
 
     private readonly ToolStripMenuItem _miStart = new("Start");
     private readonly ToolStripMenuItem _miStop = new("Stop");
@@ -24,6 +27,12 @@ public sealed class TrayApp : ApplicationContext
         _cfg = cfg;
         _client = new RadarClient(cfg);
         _reports = new ReportsForm(cfg);
+        _reports.ModelChanged += m =>
+        {
+            // Remember the choice so it survives a restart.
+            _cfg.PreferredModel = m;
+            _cfg.Save();
+        };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_miStatusLine);
@@ -43,6 +52,8 @@ public sealed class TrayApp : ApplicationContext
         { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(new ToolStripMenuItem("Open briefs folder", null,
             (_, _) => OpenPath(_cfg.OutputFolder)));
+        menu.Items.Add(new ToolStripMenuItem("Open downloads folder", null,
+            (_, _) => OpenPath(_cfg.DownloadsFolder)));
         menu.Items.Add(new ToolStripMenuItem("Open API health", null,
             (_, _) => OpenPath($"{_cfg.BaseUrl}/health")));
         menu.Items.Add(new ToolStripMenuItem("Radar status (diagnostics)…", null,
@@ -65,7 +76,15 @@ public sealed class TrayApp : ApplicationContext
         // app; two different-looking windows read as two different builds.
         _tray.DoubleClick += (_, _) => ShowReports();
         // A "run finished" balloon is an invitation to read the brief.
-        _tray.BalloonTipClicked += (_, _) => ShowReports();
+        _tray.BalloonTipClicked += (_, _) =>
+        {
+            if (_notifyDownloads)
+            {
+                _notifyDownloads = false;
+                _reports.ShowDownloadsTab();
+            }
+            else ShowReports();
+        };
 
         _timer = new System.Windows.Forms.Timer { Interval = Math.Max(2, cfg.PollSeconds) * 1000 };
         _timer.Tick += async (_, _) => await PollAsync();
@@ -78,8 +97,10 @@ public sealed class TrayApp : ApplicationContext
     private ToolStripMenuItem Job(string label, string kind) =>
         new(label, null, async (_, _) =>
         {
-            var (ok, body) = await _client.PostJobAsync(kind);
-            Notify(ok ? $"{label} queued" : $"{label} failed",
+            var model = _reports.SelectedModel;
+            var (ok, body) = await _client.PostJobAsync(kind, model);
+            var title = model is null ? label : $"{label} · {model}";
+            Notify(ok ? $"{title} queued" : $"{title} failed",
                 ok ? Summarise(body) : body,
                 ok ? ToolTipIcon.Info : ToolTipIcon.Error);
             await PollAsync();
@@ -134,8 +155,43 @@ public sealed class TrayApp : ApplicationContext
             _miStop.Enabled = status.State != RadarState.Stopped;
             _miRestart.Enabled = status.State != RadarState.Stopped;
 
+            // Fill the picker once the container is answering. Ollama may be
+            // slower to come up than the radar, so retry until it returns some.
+            if (!_modelsLoaded && status.State != RadarState.Stopped)
+            {
+                var (names, fallback) = await _client.GetModelsAsync();
+                if (names.Count > 0)
+                {
+                    _reports.SetModels(names, fallback, _cfg.PreferredModel);
+                    _modelsLoaded = true;
+                }
+            }
+
             if (_form.Visible) _form.Render(status);
-            if (_reports.Visible) _reports.SetState(status.Headline, IconFactory.ColorFor(status.State));
+            if (_reports.Visible) _reports.SetState(status.StateLine, IconFactory.ColorFor(status.State));
+
+            var (dlOk, snap) = await _client.GetDownloadsAsync();
+            if (dlOk)
+            {
+                _reports.BindDownloads(snap.Rows, snap.Folder, snap.HfAuth);
+                foreach (var row in snap.Rows)
+                {
+                    var key = $"{row.Id}:{row.Status}";
+                    if (!_seenDownloads.Add(key) || _lastState == RadarState.Unknown)
+                        continue;
+                    var (title, icon) = row.Status switch
+                    {
+                        "queued" or "downloading" => ("Leaked/drop model", ToolTipIcon.Info),
+                        "done" => ("Download finished", ToolTipIcon.Info),
+                        "refused" => ("Leak seen — not downloaded", ToolTipIcon.Warning),
+                        "failed" => ("Download failed", ToolTipIcon.Error),
+                        _ => ("", ToolTipIcon.None)
+                    };
+                    if (title.Length == 0) continue;
+                    _notifyDownloads = true;
+                    Notify(title, row.ModelId ?? row.Title, icon);
+                }
+            }
 
             if (_cfg.NotifyOnStateChange && _lastState != RadarState.Unknown
                 && status.State != _lastState)

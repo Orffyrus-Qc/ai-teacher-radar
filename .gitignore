@@ -8,3 +8,11 @@ installer/*.wixpdb
 tray/bin/
 tray/obj/
 tray/publish/
+
+# Local virtualenv (36 MB, machine-specific)
+.venv/
+
+# Token files: this one is an intentional empty placeholder, but a
+# future non-empty version would be a credential.
+*_hf_token
+*.token

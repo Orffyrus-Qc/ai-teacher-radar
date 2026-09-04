@@ -72,7 +72,7 @@ def _models(conf: dict) -> list[dict]:
     out: list[dict] = []
     seen: set[str] = set()
     with httpx.Client(timeout=30.0, follow_redirects=True,
-                      headers={"User-Agent": config.USER_AGENT}) as client:
+                      headers=config.hf_headers()) as client:
         for q in conf.get("model_queries") or []:
             try:
                 r = client.get(MODELS_API, params={
@@ -228,7 +228,7 @@ def _papers(conf: dict) -> list[dict]:
     weight = float(conf.get("weight", 1.4))
     try:
         r = httpx.get(PAPERS_API, timeout=25.0,
-                      headers={"User-Agent": config.USER_AGENT})
+                      headers=config.hf_headers())
         r.raise_for_status()
         papers = r.json()
     except Exception as exc:  # noqa: BLE001

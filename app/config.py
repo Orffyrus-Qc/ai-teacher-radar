@@ -11,6 +11,7 @@ CONFIG_DIR = ROOT / "config"
 OUT_DIR = Path(os.getenv("OUT_DIR", ROOT / "out"))
 DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
 DB_PATH = DATA_DIR / "radar.sqlite3"
+DOWNLOADS_DIR = Path(os.getenv("DOWNLOADS_DIR", DATA_DIR / "downloads"))
 
 
 def _b(name: str, default: bool) -> bool:
@@ -89,6 +90,8 @@ GPU_MAX_DEFER_S = _i("GPU_MAX_DEFER_S", 21600)
 FETCH_WHEN_GPU_BUSY = _b("FETCH_WHEN_GPU_BUSY", True)
 
 # --- scheduling ------------------------------------------------------------
+# Collapse a repeat submission onto the identical job already waiting.
+DEDUPE_QUEUED_JOBS = _b("DEDUPE_QUEUED_JOBS", True)
 SCHEDULER_MODE = os.getenv("SCHEDULER_MODE", "auto").strip().lower()
 SEARCH_SLOTS = _csv("SEARCH_SLOTS") or ["06:00", "12:00", "18:00", "23:00"]
 DAILY_SYNTHESIS_AT = os.getenv("DAILY_SYNTHESIS_AT", "23:40")
@@ -101,8 +104,56 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 LOOKBACK_HOURS = _i("LOOKBACK_HOURS", 30)
 MAX_ITEMS_PER_SOURCE = _i("MAX_ITEMS_PER_SOURCE", 60)
 SCORE_THRESHOLD = _f("SCORE_THRESHOLD", 3.0)
+DOWNLOAD_AUTO = _b("RADAR_AUTO_DOWNLOAD_LEAKS", True)
+DOWNLOAD_MAX_GIB = _f("RADAR_DOWNLOAD_MAX_GIB", 25)
+LEAK_MIN_SOURCES = _i("RADAR_LEAK_MIN_SOURCES", 2)
 
 USER_AGENT = "ai-teacher-radar/1.0 (+local)"
+
+
+def hf_token_paths() -> list[Path]:
+    paths: list[Path] = []
+    explicit = os.getenv("HF_TOKEN_FILE", "").strip()
+    if explicit:
+        paths.append(Path(explicit))
+    home = Path.home()
+    paths.extend((
+        home / ".cache" / "huggingface" / "token",
+        home / ".huggingface" / "token",
+        Path("/run/hf_token"),
+        Path("/root/.cache/huggingface/token"),
+    ))
+    return paths
+
+
+def hf_token() -> str:
+    """Read-only Hugging Face login. Never log the value."""
+    for key in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    for path in hf_token_paths():
+        try:
+            if not path.is_file() or path.stat().st_size == 0:
+                continue
+            text = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            return text.splitlines()[0].strip()
+    return ""
+
+
+def hf_auth_ready() -> bool:
+    return bool(hf_token())
+
+
+def hf_headers() -> dict[str, str]:
+    headers = {"User-Agent": USER_AGENT}
+    token = hf_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def _load(name: str) -> dict:
@@ -119,5 +170,5 @@ def keywords() -> dict:
     return _load("keywords.yaml")
 
 
-for _d in (OUT_DIR, DATA_DIR, OUT_DIR / "daily", OUT_DIR / "weekly"):
+for _d in (OUT_DIR, DATA_DIR, DOWNLOADS_DIR, OUT_DIR / "daily", OUT_DIR / "weekly"):
     _d.mkdir(parents=True, exist_ok=True)

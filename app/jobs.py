@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config, gpu, pipeline, render, store, synthesis
+from . import config, gpu, pipeline, render, store, synthesis, util
 
 log = logging.getLogger("radar.jobs")
 
@@ -27,21 +27,53 @@ KINDS = ("search", "daily", "weekly")
 _worker: threading.Thread | None = None
 _stop = threading.Event()
 _state_lock = threading.Lock()
-_live: dict = {"job": None, "phase": "idle", "gpu": "unknown", "since": None}
+_live: dict = {"job": None, "phase": "idle", "gpu": "unknown", "since": None,
+               "gpu_wait_s": 0}
 
 
-def submit(kind: str, slot: str | None = None, origin: str = "manual") -> dict:
+def submit(kind: str, slot: str | None = None, origin: str = "manual",
+           model: str | None = None) -> dict:
     if kind not in KINDS:
         raise ValueError(f"unknown job kind {kind!r}; expected one of {KINDS}")
+    # A stuck caller once queued 556 identical weeklies, eight hours of work
+    # producing one file over and over. Queueing the same job twice can never
+    # produce a different result, so collapse it onto the one already waiting.
+    if config.DEDUPE_QUEUED_JOBS:
+        existing = store.find_queued(kind, slot, model)
+        if existing:
+            log.info("not queueing a second %s (slot=%s, origin=%s): %s already waiting",
+                     kind, slot, origin, existing["id"])
+            existing["deduplicated"] = True
+            return existing
+
     job_id = f"{kind}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
-    job = store.create_job(job_id, kind, slot, origin)
-    log.info("queued %s (kind=%s slot=%s origin=%s)", job_id, kind, slot, origin)
+    job = store.create_job(job_id, kind, slot, origin, model)
+    log.info("queued %s (kind=%s slot=%s origin=%s model=%s)",
+             job_id, kind, slot, origin, model or "default")
     return job
 
 
 def live() -> dict:
     with _state_lock:
-        return dict(_live)
+        state = dict(_live)
+    state["eta"] = _estimate(state)
+    return state
+
+
+def _estimate(state: dict) -> dict:
+    """Average remaining time for the whole job, from past runs of its kind."""
+    job_id = state.get("job")
+    kind = job_id.split("-", 1)[0] if job_id else ""
+    avg, samples = (None, 0)
+    if kind in KINDS:
+        try:
+            avg, samples = store.avg_run_seconds(kind)
+        except Exception:  # noqa: BLE001 - an estimate must never break /queue
+            log.debug("could not average %s runs", kind, exc_info=True)
+    return util.estimate_remaining(
+        phase=state.get("phase"), since=state.get("since"),
+        gpu_wait_s=float(state.get("gpu_wait_s") or 0),
+        avg_total_s=avg, samples=samples, kind=kind or "job")
 
 
 def _set_live(**kv) -> None:
@@ -82,9 +114,60 @@ def _loop() -> None:
     log.info("worker stopped")
 
 
+def queue_estimate(worker: dict | None = None) -> dict:
+    """Time to finish everything outstanding: the running job plus the queue.
+
+    Each waiting job is costed at the average for its own kind, so a queue of
+    weeklies is not priced as if it were searches.
+    """
+    worker = worker if worker is not None else live()
+    try:
+        pending = store.count_jobs_by_kind(["queued", "deferred_gpu_busy"])
+    except Exception:  # noqa: BLE001 - an estimate must never break /queue
+        log.debug("could not count pending jobs", exc_info=True)
+        pending = {}
+
+    total = 0.0
+    unknown = 0
+
+    # The job already in flight is counted from its own elapsed time.
+    running_left = (worker.get("eta") or {}).get("remaining_s")
+    running = worker.get("phase") not in (None, "", "idle")
+    if running:
+        if running_left is None:
+            unknown += 1
+        else:
+            total += running_left
+
+    for kind, count in pending.items():
+        avg, _ = (None, 0)
+        try:
+            avg, _ = store.avg_run_seconds(kind)
+        except Exception:  # noqa: BLE001
+            log.debug("could not average %s runs", kind, exc_info=True)
+        if avg is None:
+            unknown += count
+        else:
+            total += avg * count
+
+    waiting = sum(pending.values())
+    jobs_left = waiting + (1 if running else 0)
+    if jobs_left == 0:
+        return {"jobs": 0, "remaining_s": 0.0, "unknown_jobs": 0,
+                "waiting": 0, "basis": "nothing queued"}
+
+    basis = f"{jobs_left} job(s) at the average for each kind"
+    if unknown:
+        basis += f"; {unknown} with no history yet, not counted"
+    return {"jobs": jobs_left, "waiting": waiting,
+            "remaining_s": None if unknown >= jobs_left else round(total, 1),
+            "unknown_jobs": unknown, "basis": basis}
+
+
 def _run(job: dict) -> None:
     job_id, kind, slot = job["id"], job["kind"], job["slot"]
-    _set_live(job=job_id, phase="starting", since=store.utcnow())
+    job_model = job.get("model") or None   # None = configured default
+    _set_live(job=job_id, phase="starting", since=store.utcnow(), gpu_wait_s=0)
     store.update_job(job_id, state="running", started_at=job.get("started_at") or store.utcnow(),
                      attempts=job.get("attempts", 0) + 1)
     run_id = job_id
@@ -124,6 +207,7 @@ def _run(job: dict) -> None:
                     break
 
                 waited = time.monotonic() - wait_started
+                _set_live(gpu_wait_s=int(waited))
                 if waited >= config.GPU_MAX_DEFER_S:
                     log.warning("%s: GPU still busy after %.0fs, publishing without LLM",
                                 job_id, waited)
@@ -154,15 +238,17 @@ def _run(job: dict) -> None:
         if kind == "search":
             if harvest_state is None:
                 harvest_state = pipeline.harvest(run_id)
-            out_path = pipeline.publish(harvest_state, run_id=run_id,
+            out_path = pipeline.publish(harvest_state, run_id=run_id, model=job_model,
                                         slot=slot or render.local_now().strftime("%H:%M"),
                                         use_llm=use_llm, gpu_note=gpu_note)
             new_items, total = harvest_state["new_count"], len(harvest_state["items"])
         elif kind == "daily":
-            out_path = synthesis.run_daily(run_id, use_llm=use_llm, gpu_note=gpu_note)
+            out_path = synthesis.run_daily(run_id, use_llm=use_llm, gpu_note=gpu_note,
+                                           model=job_model)
             new_items = total = 0
         else:
-            out_path = synthesis.run_weekly(run_id, use_llm=use_llm, gpu_note=gpu_note)
+            out_path = synthesis.run_weekly(run_id, use_llm=use_llm, gpu_note=gpu_note,
+                                            model=job_model)
             new_items = total = 0
 
         if deferred_note and deferred_note.exists():

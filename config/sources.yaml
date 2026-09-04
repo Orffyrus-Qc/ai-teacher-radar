@@ -73,7 +73,7 @@ huggingface:
   enabled: true
   weight: 1.4
   # New/updated models to consider as *teacher* candidates for a coder model.
-  model_queries: ["coder", "code", "distill", "instruct", "reasoning"]
+  model_queries: ["coder", "code", "distill", "instruct", "reasoning", "leaked"]
   max_models: 120
   # Ignore anything that cannot plausibly run or teach on this rig.
   max_params_b: 200

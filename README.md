@@ -252,7 +252,13 @@ only when the GPU gate is idle. They never default to `qwen3.5:9b` (Borg's LoRA
 student) or `qwen3.8:27b` (live search): if `.env` still names those tags, radar
 remaps to `gpt-oss:20b` or publishes a rule-based brief. Both are unloaded
 (`keep_alive: 0`) the moment a run finishes so a queued render or train is not
-blocked. LLM actions are **review** or **ignore** — never download or pull.
+blocked. LLM notes stay **review** or **ignore**. The app may **notify** and
+optionally download a Hugging Face GGUF when a leak is **corroborated**: at
+least two independent web sources (different hosts) must call that model a
+leak. A Hugging Face filename is not enough. Two Reddit posts count as one
+source. It uses your local `huggingface-cli` login for gated repos.
+Proprietary dumps (ChatGPT/Claude/Gemini), torrents, and off-list hosts are
+notified and refused — never `ollama pull`.
 
 Set `LLM_ENABLED=false` for a zero-GPU deployment: you still get harvesting,
 scoring, dedup and rule-based briefs.

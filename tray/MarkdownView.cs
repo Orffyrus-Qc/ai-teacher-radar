@@ -17,6 +17,7 @@ public sealed class MarkdownView : RichTextBox
     private const int WM_SETREDRAW = 0x000B;
     private const int EM_SETRECT = 0x00B3;
     private const int MaxCell = 30;
+    private const int MaxModelCell = 96;
 
     [DllImport("user32.dll")]
     private static extern int SendMessage(IntPtr hWnd, int msg, bool wParam, int lParam);
@@ -266,12 +267,26 @@ public sealed class MarkdownView : RichTextBox
         if (grid.Count == 0) return;
 
         var columns = grid.Max(r => r.Length);
+        var modelCol = -1;
+        if (grid.Count > 0)
+        {
+            for (var c = 0; c < grid[0].Length; c++)
+            {
+                var header = Strip(grid[0][c]);
+                if (header.Equals("Model", StringComparison.OrdinalIgnoreCase)
+                    || header.StartsWith("Model ", StringComparison.OrdinalIgnoreCase))
+                    modelCol = c;
+            }
+        }
         var widths = new int[columns];
         for (var c = 0; c < columns; c++)
-            // Capped: one very long cell must not push the whole table past the
-            // pane width, because wrapping destroys a monospace layout.
-            widths[c] = Math.Min(MaxCell,
+        {
+            // Model names (HF ids) need the full string; other columns stay
+            // capped so Params/Fitness/License do not inflate the row.
+            var cap = c == modelCol ? MaxModelCell : MaxCell;
+            widths[c] = Math.Min(cap,
                 grid.Max(r => c < r.Length ? Strip(r[c]).Length : 0));
+        }
 
         Append("\n", _body, _fg);
         for (var r = 0; r < grid.Count; r++)

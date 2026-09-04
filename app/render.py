@@ -28,6 +28,7 @@ BUCKET_TITLES = {
     "eval": "Evaluation",
     "tooling": "Tooling",
     "release": "Releases",
+    "leak": "Leaked / early-drop",
 }
 
 
@@ -76,6 +77,15 @@ def _entry(item: dict) -> str:
     if note:
         out.append(f"  {note[:600].strip()}")
     return "\n".join(out)
+
+
+def _leak_entry(item: dict) -> str:
+    text = _entry(item)
+    extra = item.get("extra") or {}
+    sources = extra.get("leak_sources") or []
+    if sources:
+        text += f"\n  leak confirmed by {len(sources)} sources: {', '.join(sources)}"
+    return text
 
 
 def _teacher_entry(item: dict) -> str:
@@ -148,6 +158,9 @@ def render_search(*, run_id: str, slot: str, items: list[dict], report: dict,
     if tldr:
         parts += ["## TL;DR", "", tldr.strip(), ""]
 
+    leaks = [i for i in items if (i.get("extra") or {}).get("leak_watch")]
+    parts += _section("Leaked / early-drop models", leaks, _leak_entry,
+                      "No model with 2 independent web sources calling it a leak.")
     parts += _section("Teacher-model watch", teachers, _teacher_entry,
                       "Nothing new that would make a better teacher than what you already have.")
     parts += _section("Student-model watch", students, _entry,

@@ -17,6 +17,8 @@ services:
       # the ./ defaults keep a dev checkout working unchanged.
       - ${RADAR_OUT_DIR:-./out}:/app/out
       - ${RADAR_DATA_DIR:-./data}:/app/data
+      - ${RADAR_DOWNLOADS_DIR:-./data/downloads}:/app/data/downloads
+      - ${HF_TOKEN_FILE:-./.empty_hf_token}:/run/hf_token:ro
       - ./config:/app/config:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

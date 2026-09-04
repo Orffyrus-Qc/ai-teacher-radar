@@ -187,3 +187,65 @@ def fits_verdict(vram: dict) -> str:
     if q4 <= 26:
         return "needs both cards (split) at Q4"
     return "too large for this rig - rent or use the API"
+
+
+def estimate_remaining(*, phase: str | None, since: str | None, gpu_wait_s: float,
+                       avg_total_s: float | None, samples: int,
+                       kind: str, now: datetime | None = None) -> dict:
+    """How much longer the whole job should take, averaged over past runs.
+
+    Pure on purpose: the caller supplies the average and the clock, so this is
+    testable without a database or a running worker.
+    """
+    result = {"remaining_s": None, "avg_total_s": None, "elapsed_s": None,
+              "samples": samples, "basis": "idle"}
+    if avg_total_s is not None:
+        result["avg_total_s"] = round(avg_total_s, 1)
+
+    if not phase or phase == "idle":
+        return result
+
+    elapsed = None
+    if since:
+        try:
+            started = dateparser.parse(since)
+        except (ValueError, TypeError):
+            started = None
+        if started is not None:
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            ref = now or datetime.now(timezone.utc)
+            if ref.tzinfo is None:
+                ref = ref.replace(tzinfo=timezone.utc)
+            # Time spent queued behind the GPU is not work, so it must not
+            # count against the estimate.
+            elapsed = max(0.0, (ref - started).total_seconds() - max(0.0, gpu_wait_s))
+
+    if elapsed is not None:
+        result["elapsed_s"] = round(elapsed, 1)
+
+    if phase == "deferred_gpu_busy":
+        result["basis"] = "paused - waiting for the GPU"
+        return result
+    if avg_total_s is None:
+        result["basis"] = f"no completed {kind} runs to average yet"
+        return result
+    if elapsed is None:
+        result["basis"] = "start time unknown"
+        return result
+
+    result["remaining_s"] = round(max(0.0, avg_total_s - elapsed), 1)
+    result["basis"] = f"average of {samples} previous {kind} run(s)"
+    return result
+
+
+def human_duration(seconds: float | None) -> str:
+    """Short, readable: "45s", "2m 10s", "1h 04m"."""
+    if seconds is None:
+        return "unknown"
+    seconds = max(0, int(round(seconds)))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"

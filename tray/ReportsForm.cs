@@ -18,8 +18,11 @@ public sealed class ReportsForm : Form
     private readonly TextBox _filter = new();
     private readonly Label _status = new();
     private readonly Label _state = new();
+    private readonly ComboBox _model = new();
     private readonly FileSystemWatcher? _watcher;
     private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 900 };
+    private readonly TabControl _tabs = new();
+    private readonly DownloadsPanel _downloads;
 
     private readonly SplitContainer _split;
     private List<ReportEntry> _all = [];
@@ -28,6 +31,7 @@ public sealed class ReportsForm : Form
     public ReportsForm(AppConfig cfg)
     {
         _cfg = cfg;
+        _downloads = new DownloadsPanel(cfg);
 
         Text = "AI Teacher Radar — reports";
         Size = new Size(1120, 760);
@@ -57,7 +61,42 @@ public sealed class ReportsForm : Form
         var editor = Button("Open in editor", 476);
         editor.Click += (_, _) => { if (_current is not null) Open(_current); };
 
-        bar.Controls.AddRange([_filter, refresh, folder, editor]);
+        var dlFolder = new Button
+        {
+            Bounds = new Rectangle(606, 8, 28, 26),
+            FlatStyle = FlatStyle.Flat,
+            Image = FolderGlyph.Small(),
+            ImageAlign = ContentAlignment.MiddleCenter,
+            BackColor = Color.FromArgb(46, 51, 58),
+            ForeColor = Fg,
+        };
+        dlFolder.FlatAppearance.BorderColor = Color.FromArgb(70, 78, 88);
+        new ToolTip().SetToolTip(dlFolder, "Open downloads folder");
+        dlFolder.Click += (_, _) =>
+        {
+            _tabs.SelectedIndex = 1;
+            Open(_cfg.DownloadsFolder);
+        };
+
+        // Which model a manually-run job should use; the queue keeps whatever
+        // was chosen when the job was submitted.
+        var modelLabel = new Label
+        {
+            Text = "Model",
+            Bounds = new Rectangle(642, 13, 56, 18),   // "Model" clips at 44px
+            ForeColor = Color.FromArgb(150, 160, 172)
+        };
+        _model.SetBounds(702, 9, 250, 24);
+        _model.DropDownStyle = ComboBoxStyle.DropDownList;
+        _model.FlatStyle = FlatStyle.Flat;
+        _model.BackColor = Bg;
+        _model.ForeColor = Fg;
+        _model.Items.Add(DefaultChoice);
+        _model.SelectedIndex = 0;
+        new ToolTip().SetToolTip(_model, "LLM used by jobs you start from the tray");
+        _model.SelectedIndexChanged += (_, _) => ModelChanged?.Invoke(SelectedModel);
+
+        bar.Controls.AddRange([_filter, refresh, folder, editor, dlFolder, modelLabel, _model]);
 
         // ---- split ----
         _split = new SplitContainer
@@ -88,12 +127,20 @@ public sealed class ReportsForm : Form
         _split.Panel1.Controls.Add(_list);
         _split.Panel2.Controls.Add(_view);
 
+        _tabs.Dock = DockStyle.Fill;
+        var reportsPage = new TabPage("Reports") { BackColor = Bg, ForeColor = Fg };
+        reportsPage.Controls.Add(_split);
+        var downloadsPage = new TabPage("Downloads") { BackColor = Bg, ForeColor = Fg };
+        downloadsPage.Controls.Add(_downloads);
+        _tabs.TabPages.Add(reportsPage);
+        _tabs.TabPages.Add(downloadsPage);
+
         // One strip at the bottom: what you are reading on the left, what the
         // radar is doing on the right, so this window alone tells you both.
         var strip = new Panel { Dock = DockStyle.Bottom, Height = 22, BackColor = Bg };
 
         _state.Dock = DockStyle.Right;
-        _state.Width = 260;
+        _state.Width = 430;
         _state.TextAlign = ContentAlignment.MiddleRight;
         _state.ForeColor = Color.FromArgb(150, 160, 172);
         _state.Padding = new Padding(0, 0, 12, 0);
@@ -107,7 +154,7 @@ public sealed class ReportsForm : Form
         strip.Controls.Add(_status);
         strip.Controls.Add(_state);
 
-        Controls.AddRange([_split, strip, bar]);
+        Controls.AddRange([_tabs, strip, bar]);
 
         // A run finishing mid-read should show up without a manual refresh.
         try
@@ -149,6 +196,8 @@ public sealed class ReportsForm : Form
         var wanted = 330;
         var max = Math.Max(_split.Panel1MinSize + 1, _split.Width - _split.Panel2MinSize - 6);
         _split.SplitterDistance = Math.Clamp(wanted, _split.Panel1MinSize + 1, max);
+        // Otherwise the combo opens highlighted and swallows arrow keys.
+        ActiveControl = _list;
     }
 
     private static Button Button(string text, int x)
@@ -163,6 +212,44 @@ public sealed class ReportsForm : Form
         };
         b.FlatAppearance.BorderColor = Color.FromArgb(70, 78, 88);
         return b;
+    }
+
+    public void ShowDownloadsTab()
+    {
+        _tabs.SelectedIndex = 1;
+        Show();
+        WindowState = FormWindowState.Normal;
+        BringToFront();
+        Activate();
+    }
+
+    public void BindDownloads(IReadOnlyList<DownloadRow> rows, string folder, bool hfAuth = false) =>
+        _downloads.Bind(rows, folder, hfAuth);
+
+    private const string DefaultChoice = "(configured default)";
+
+    /// <summary>Raised when the user picks a different model; null = default.</summary>
+    public event Action<string?>? ModelChanged;
+
+    /// <summary>The model manual runs should use, or null for the default.</summary>
+    public string? SelectedModel =>
+        _model.SelectedItem is string s && !s.StartsWith(DefaultChoice, StringComparison.Ordinal)
+            ? s : null;
+
+    /// <summary>
+    /// Fill the picker once Ollama has answered. Keeps the current choice if it
+    /// still exists, so a refresh never silently changes what you selected.
+    /// </summary>
+    public void SetModels(IReadOnlyList<string> names, string? fallback, string? prefer)
+    {
+        var wanted = SelectedModel ?? prefer;
+        _model.BeginUpdate();
+        _model.Items.Clear();
+        _model.Items.Add(fallback is null ? DefaultChoice : $"{DefaultChoice} — {fallback}");
+        foreach (var n in names) _model.Items.Add(n);
+        var index = wanted is null ? 0 : _model.Items.IndexOf(wanted);
+        _model.SelectedIndex = index >= 0 ? index : 0;
+        _model.EndUpdate();
     }
 
     /// <summary>Live radar state, pushed in by the tray on each poll.</summary>

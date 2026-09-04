@@ -31,6 +31,33 @@ def available(model: str | None = None) -> tuple[bool, str]:
     return True, "ok"
 
 
+def list_models() -> list[dict]:
+    """Models Ollama currently has, newest first. Empty list if it is down."""
+    try:
+        r = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=8.0,
+                      headers={"User-Agent": config.USER_AGENT})
+        r.raise_for_status()
+        models = r.json().get("models") or []
+    except Exception as exc:  # noqa: BLE001 - the picker degrades to defaults
+        log.warning("could not list Ollama models: %s", exc)
+        return []
+
+    out = []
+    for m in models:
+        name = m.get("name") or m.get("model")
+        if not name:
+            continue
+        details = m.get("details") or {}
+        out.append({
+            "name": name,
+            "size_gb": round((m.get("size") or 0) / 1e9, 1),
+            "parameters": details.get("parameter_size"),
+            "quantization": details.get("quantization_level"),
+        })
+    out.sort(key=lambda x: x["name"])
+    return out
+
+
 def generate(prompt: str, *, model: str | None = None, system: str | None = None,
              num_ctx: int = 8192, temperature: float = 0.3,
              num_predict: int = 512) -> str | None:

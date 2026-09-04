@@ -84,8 +84,10 @@ public sealed class StatusForm : Form
         {
             $"Container    {s.ContainerStatus}",
             $"Worker       {s.WorkerPhase}{(s.CurrentJob is null ? "" : $"  ({s.CurrentJob})")}",
+            $"Remaining    {s.EtaDetail}",
             $"Queue        {s.Waiting} waiting" +
-                (s.DeferredByGpu > 0 ? $", {s.DeferredByGpu} deferred by GPU" : ""),
+                (s.DeferredByGpu > 0 ? $", {s.DeferredByGpu} deferred by GPU" : "") +
+                (s.QueueEta is null ? "" : $"  —  {s.QueueEta}"),
             $"GPU          {s.GpuSummary}",
             $"Scheduler    {s.SchedulerMode}",
             $"LLM          {(s.LlmReady ? "ready" : "not ready")} — {s.LlmDetail}"

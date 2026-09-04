@@ -61,6 +61,11 @@ buckets:
     terms: ["open weights", "open-source model", "model release", "released the weights",
             "apache 2.0", "mit license", checkpoint, "base model", "instruct model"]
 
+  leak:
+    weight: 2.5
+    terms: [leaked, "leaked model", "leaked weights", "weights leak", "model leak",
+            "unofficial dump", "early weights", "weights dropped"]
+
 # Items whose text matches any of these are dropped before scoring.
 exclude:
   - "stock price"

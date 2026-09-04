@@ -36,6 +36,8 @@ poll.
   the same, so opening from the tray and from the desktop always give you the
   same interface
 - **Open briefs folder** — the `out/` directory
+- **Open downloads folder** — licensed leak/drop GGUFs (`data/downloads`)
+- **Downloads tab** — list of queued/done/refused downloads; folder icon opens that directory
 - **Open API health** — `/health` in the browser
 - **Radar status (diagnostics)…** — the separate troubleshooting dashboard
   (container status, per-GPU bars, next scheduled runs). Deliberately not what

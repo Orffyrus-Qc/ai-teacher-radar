@@ -72,8 +72,12 @@ public sealed class AppConfig
     public string BaseUrl { get; set; } = "http://127.0.0.1:8791";
     public string OutputFolder { get; set; } = Path.Combine(WritableRoot, "out");
     public string DataFolder { get; set; } = Path.Combine(WritableRoot, "data");
+    public string DownloadsFolder { get; set; } = Path.Combine(WritableRoot, "data", "downloads");
     public string EnvFile { get; set; } = Path.Combine(WritableRoot, ".env");
     public int PollSeconds { get; set; } = 5;
+
+    /// <summary>Last model picked for manual runs; null means the default.</summary>
+    public string? PreferredModel { get; set; }
 
     /// <summary>
     /// Open the app window when the app starts. Off is useful when launching
@@ -135,8 +139,16 @@ public sealed class AppConfig
         Directory.CreateDirectory(Path.GetDirectoryName(EnvFile) ?? UserRoot);
         Directory.CreateDirectory(OutputFolder);
         Directory.CreateDirectory(DataFolder);
+        Directory.CreateDirectory(DownloadsFolder);
 
-        if (File.Exists(EnvFile)) return;
+        if (File.Exists(EnvFile))
+        {
+            EnsureEnvKey("RADAR_DOWNLOADS_DIR", DownloadsFolder.Replace('\\', '/'));
+            var tokenFile = HuggingFaceTokenFile();
+            if (tokenFile is not null)
+                EnsureEnvKey("HF_TOKEN_FILE", tokenFile);
+            return;
+        }
 
         // Seed from the shipped .env.example so every tuning knob is present
         // and documented; then pin the machine-specific values.
@@ -155,8 +167,41 @@ public sealed class AppConfig
         Set("TZ", IanaTimeZone());
         Set("RADAR_OUT_DIR", OutputFolder.Replace('\\', '/'));
         Set("RADAR_DATA_DIR", DataFolder.Replace('\\', '/'));
+        Set("RADAR_DOWNLOADS_DIR", DownloadsFolder.Replace('\\', '/'));
+        var hfTokenPath = HuggingFaceTokenFile();
+        if (hfTokenPath is not null)
+            Set("HF_TOKEN_FILE", hfTokenPath);
 
         File.WriteAllLines(EnvFile, lines);
+    }
+
+    /// <summary>Existing huggingface-cli login, if present. Never copies the secret.</summary>
+    private static string? HuggingFaceTokenFile()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var path = Path.Combine(home, ".cache", "huggingface", "token");
+        return File.Exists(path) ? path.Replace('\\', '/') : null;
+    }
+
+    private void EnsureEnvKey(string key, string value)
+    {
+        try
+        {
+            var lines = File.ReadAllLines(EnvFile).ToList();
+            var i = lines.FindIndex(l => l.StartsWith(key + "=", StringComparison.Ordinal));
+            if (i >= 0)
+            {
+                var current = lines[i][(key.Length + 1)..].Trim();
+                if (current.Length > 0) return;
+                lines[i] = $"{key}={value}";
+            }
+            else lines.Add($"{key}={value}");
+            File.WriteAllLines(EnvFile, lines);
+        }
+        catch
+        {
+            // Next Start can retry.
+        }
     }
 
     /// <summary>

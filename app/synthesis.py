@@ -69,7 +69,8 @@ def _teacher_table(items: list[dict], limit: int = 10) -> list[str]:
 
 
 # ------------------------------------------------------------------- daily
-def run_daily(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | None = None) -> Path:
+def run_daily(run_id: str, *, use_llm: bool, gpu_note: str,
+              day: datetime | None = None, model: str | None = None) -> Path:
     day = day or render.local_now()
     start, end = _bounds(day)
     items = store.items_between(start, end, min_score=config.SCORE_THRESHOLD)
@@ -93,7 +94,7 @@ def run_daily(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | None
         "### Review shortlist\n(concrete artefacts worth reviewing today — never "
         "say download, pull, or install — or 'nothing today')\n"
         "### Skip\n(what looked interesting but is not worth your time, one line each)",
-        use_llm)
+        use_llm, model=model)
 
     out = [
         render._fm(title=f"Daily synthesis {date_s}", date=date_s, kind="daily-synthesis",
@@ -129,7 +130,8 @@ def run_daily(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | None
 
 
 # ------------------------------------------------------------------ weekly
-def run_weekly(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | None = None) -> Path:
+def run_weekly(run_id: str, *, use_llm: bool, gpu_note: str,
+               day: datetime | None = None, model: str | None = None) -> Path:
     day = day or render.local_now()
     end_local = datetime.combine(day.date(), dtime.min, tzinfo=TZ) + timedelta(days=1)
     start_local = end_local - timedelta(days=7)
@@ -159,7 +161,7 @@ def run_weekly(run_id: str, *, use_llm: bool, gpu_note: str, day: datetime | Non
         "Consider that I can run roughly a 30B model at Q4 on 16 GB)\n"
         "### Pipeline changes worth making\n(concrete, ordered, at most 5)\n"
         "### Backlog\n(things to revisit if they get a second data point)",
-        use_llm, model=config.LLM_SYNTHESIS_MODEL, num_ctx=32768,
+        use_llm, model=model or config.LLM_SYNTHESIS_MODEL, num_ctx=32768,
         num_predict=4000)
 
     out = [
