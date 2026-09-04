@@ -57,6 +57,16 @@ def _reserved_llm(name: str) -> bool:
     return any(n == prefix or n.startswith(f"{prefix}-") for prefix in _RESERVED_LLM_PREFIXES)
 
 
+def is_reserved_llm(name: str | None) -> bool:
+    """True for models Borg owns. The radar must never load these."""
+    return bool(name) and _reserved_llm(name)
+
+
+def safe_llm(name: str | None) -> str | None:
+    """An explicit model request, or None if it is one Borg reserves."""
+    return None if is_reserved_llm(name) else name
+
+
 def notes_model() -> str | None:
     """Model for per-item notes. Never the 9B student or 27B search model."""
     if not LLM_ENABLED:

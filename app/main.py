@@ -76,6 +76,10 @@ def create_job(req: JobRequest, x_radar_origin: str | None = Header(default=None
     origin = (x_radar_origin or "manual").strip().lower()
     if origin not in ("n8n", "internal", "manual"):
         origin = "manual"
+    if config.is_reserved_llm(req.model):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{req.model} is reserved for Borg; the radar must not load it")
     try:
         job = jobs.submit(req.kind, slot=req.slot, origin=origin, model=req.model)
     except ValueError as exc:
@@ -113,7 +117,12 @@ def get_job(job_id: str):
 @api.get("/models")
 def models():
     """What the picker offers, and what a job gets if it picks nothing."""
-    return {"models": llm.list_models(),
+    # Reserved models are filtered out, not merely rejected later: the picker
+    # should not offer something the radar is forbidden to load.
+    available = [m for m in llm.list_models() if not config.is_reserved_llm(m["name"])]
+    return {"models": available,
+            "reserved": [m["name"] for m in llm.list_models()
+                         if config.is_reserved_llm(m["name"])],
             "defaults": {"notes": config.notes_model(),
                          "synthesis": config.LLM_SYNTHESIS_MODEL}}
 

@@ -61,6 +61,11 @@ def publish(state: dict, *, run_id: str, slot: str, use_llm: bool,
     items = state["items"]
     assign_roles(items)
     llm_state = "skipped"
+    # An explicit request must not smuggle in a model Borg owns; drop it and
+    # fall back rather than loading the student out from under Borg.
+    if model and config.is_reserved_llm(model):
+        log.warning("ignoring reserved model %s for run %s; Borg owns it", model, run_id)
+        model = None
     note_model = (model or config.notes_model()) if use_llm else None
 
     if note_model:

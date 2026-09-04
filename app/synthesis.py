@@ -71,6 +71,7 @@ def _teacher_table(items: list[dict], limit: int = 10) -> list[str]:
 # ------------------------------------------------------------------- daily
 def run_daily(run_id: str, *, use_llm: bool, gpu_note: str,
               day: datetime | None = None, model: str | None = None) -> Path:
+    model = config.safe_llm(model)          # never a model Borg reserves
     day = day or render.local_now()
     start, end = _bounds(day)
     items = store.items_between(start, end, min_score=config.SCORE_THRESHOLD)
@@ -125,13 +126,14 @@ def run_daily(run_id: str, *, use_llm: bool, gpu_note: str,
     ]
     path.write_text("\n".join(out), encoding="utf-8")
     if use_llm:
-        llm.unload()
+        llm.unload(model or config.LLM_SYNTHESIS_MODEL)
     return path
 
 
 # ------------------------------------------------------------------ weekly
 def run_weekly(run_id: str, *, use_llm: bool, gpu_note: str,
                day: datetime | None = None, model: str | None = None) -> Path:
+    model = config.safe_llm(model)          # never a model Borg reserves
     day = day or render.local_now()
     end_local = datetime.combine(day.date(), dtime.min, tzinfo=TZ) + timedelta(days=1)
     start_local = end_local - timedelta(days=7)
@@ -195,13 +197,17 @@ def run_weekly(run_id: str, *, use_llm: bool, gpu_note: str,
     ]
     path.write_text("\n".join(out), encoding="utf-8")
     if use_llm:
-        llm.unload()
+        llm.unload(model or config.LLM_SYNTHESIS_MODEL)
     return path
 
 
 def _llm_block(items: list[dict], prompt: str, use_llm: bool,
                model: str | None = None, num_ctx: int = 24576,
                num_predict: int = 2500) -> tuple[str, str]:
+    # Reserved models are Borg's; an override must not reach one.
+    if model and config.is_reserved_llm(model):
+        log.warning("ignoring reserved model %s; Borg owns it", model)
+        model = None
     if not items:
         return "*No items above threshold in this period.*", "n/a"
     if not use_llm:
