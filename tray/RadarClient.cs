@@ -155,7 +155,9 @@ public sealed class RadarClient(AppConfig cfg)
 
     private async Task<(bool Ok, string Output)> StartLocalAsync()
     {
-        var py = Path.Combine(AppConfig.RadarRoot, ".venv", "Scripts", "python.exe");
+        var scripts = Path.Combine(AppConfig.RadarRoot, ".venv", "Scripts");
+        var pyw = Path.Combine(scripts, "pythonw.exe");
+        var py = File.Exists(pyw) ? pyw : Path.Combine(scripts, "python.exe");
         if (!File.Exists(py))
             return (false,
                 "Docker Desktop is not running, and there is no local .venv. " +
@@ -166,13 +168,15 @@ public sealed class RadarClient(AppConfig cfg)
         try
         {
             var psi = new ProcessStartInfo(py,
-                "-m uvicorn app.main:api --host 127.0.0.1 --port 8791 --log-level info")
+                "-m uvicorn app.main:api --host 127.0.0.1 --port 8791 --log-level warning")
             {
                 WorkingDirectory = AppConfig.RadarRoot,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
             };
             ApplyDotEnv(psi, cfg.EnvFile);
             psi.Environment["PYTHONPATH"] = AppConfig.RadarRoot;
@@ -284,8 +288,10 @@ public sealed class RadarClient(AppConfig cfg)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8
             };
