@@ -17,6 +17,7 @@ public sealed class StatusForm : Form
         Size = new Size(520, 460);
         MinimumSize = new Size(460, 400);
         StartPosition = FormStartPosition.CenterScreen;
+        DoubleBuffered = true;
         BackColor = Color.FromArgb(24, 26, 30);
         ForeColor = Color.FromArgb(232, 236, 240);
         Font = new Font("Segoe UI", 9f);
