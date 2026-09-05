@@ -1,25 +1,43 @@
 using System.Diagnostics;
+using System.Threading;
 
 namespace RadarTray;
 
 internal static class Program
 {
+    internal const string ShowEventName = @"Global\AITeacherRadarTray-Show";
+
     [STAThread]
     private static void Main(string[] args)
     {
+        EventWaitHandle? showEvent = null;
+        try
+        {
+            showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            showEvent = null;
+        }
+
         // One tray icon is enough; a second instance just confuses the status.
         using var single = new Mutex(true, @"Global\AITeacherRadarTray", out var isFirst);
+        var minimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)
+                                   || a.Equals("/minimized", StringComparison.OrdinalIgnoreCase));
+        var skipDocker = args.Any(a => a.Equals("--no-docker-check", StringComparison.OrdinalIgnoreCase));
         if (!isFirst)
         {
-            MessageBox.Show("App already running in the system tray.",
-                "AI Teacher Radar", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // Borg / a second click asks the running tray to raise its window.
+            if (!minimized)
+                showEvent?.Set();
+            showEvent?.Dispose();
             return;
         }
 
         ApplicationConfiguration.Initialize();
 
         var cfg = AppConfig.Load();
-        if (!File.Exists(cfg.ComposeFile))
+        if (!File.Exists(cfg.ComposeFile) && !skipDocker)
         {
             var answer = MessageBox.Show(
                 $"docker-compose.yml not found at:\n{cfg.ComposeFile}\n\n" +
@@ -40,22 +58,22 @@ internal static class Program
             cfg.Save();
         }
 
-        if (!DockerPresent())
+        if (!skipDocker && !DockerPresent())
         {
             MessageBox.Show("docker was not found on PATH. Start Docker Desktop and try again.",
                 "AI Teacher Radar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            showEvent?.Dispose();
             return;
         }
 
         // The window opens on startup by default. --minimized suppresses it,
         // which is what you want from the Startup folder; --reports forces it
         // even if OpenWindowOnStartup has been turned off in the config.
-        var minimized = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)
-                                   || a.Equals("/minimized", StringComparison.OrdinalIgnoreCase));
         var forced = args.Any(a => a.Equals("--reports", StringComparison.OrdinalIgnoreCase));
         var openWindow = forced || (cfg.OpenWindowOnStartup && !minimized);
 
-        Application.Run(new TrayApp(cfg, openWindow));
+        Application.Run(new TrayApp(cfg, openWindow, showEvent));
+        showEvent?.Dispose();
     }
 
     private static bool DockerPresent()

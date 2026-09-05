@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading;
 
 namespace RadarTray;
 
@@ -16,15 +17,18 @@ public sealed class TrayApp : ApplicationContext
     private bool _polling;
     private bool _notifyDownloads;
     private readonly HashSet<string> _seenDownloads = [];
+    private readonly EventWaitHandle? _showEvent;
+    private int _showRequested;
 
     private readonly ToolStripMenuItem _miStart = new("Start");
     private readonly ToolStripMenuItem _miStop = new("Stop");
     private readonly ToolStripMenuItem _miRestart = new("Restart");
     private readonly ToolStripMenuItem _miStatusLine = new("Polling…") { Enabled = false };
 
-    public TrayApp(AppConfig cfg, bool openWindow = true)
+    public TrayApp(AppConfig cfg, bool openWindow = true, EventWaitHandle? showEvent = null)
     {
         _cfg = cfg;
+        _showEvent = showEvent;
         _client = new RadarClient(cfg);
         _reports = new ReportsForm(cfg);
         _reports.ModelChanged += m =>
@@ -90,8 +94,39 @@ public sealed class TrayApp : ApplicationContext
         _timer.Tick += async (_, _) => await PollAsync();
         _timer.Start();
 
+        if (_showEvent is not null)
+        {
+            var watch = new Thread(WatchShow) { IsBackground = true, Name = "radar-tray-show" };
+            watch.Start();
+            var pulse = new System.Windows.Forms.Timer { Interval = 150 };
+            pulse.Tick += (_, _) =>
+            {
+                if (Interlocked.Exchange(ref _showRequested, 0) == 1)
+                    ShowReports();
+            };
+            pulse.Start();
+        }
+
         _ = PollAsync();
         if (openWindow) ShowReports();
+    }
+
+    private void WatchShow()
+    {
+        while (true)
+        {
+            try
+            {
+                if (_showEvent is null)
+                    return;
+                if (_showEvent.WaitOne(Timeout.Infinite))
+                    Interlocked.Exchange(ref _showRequested, 1);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+        }
     }
 
     private ToolStripMenuItem Job(string label, string kind) =>
