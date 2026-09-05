@@ -42,7 +42,9 @@ class JobRequest(BaseModel):
 
 @api.get("/health")
 def health():
-    ok, why = llm.available()
+    # Keep this cheap: Borg's start probe used to treat a 2s Ollama hang as "down"
+    # and kill a live uvicorn. Job paths still use the 8s default.
+    ok, why = llm.available(timeout=0.4)
     return {
         "status": "ok",
         "tz": config.TZ,

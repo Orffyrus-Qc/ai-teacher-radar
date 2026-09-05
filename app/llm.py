@@ -12,14 +12,14 @@ from . import config
 log = logging.getLogger("radar.llm")
 
 
-def available(model: str | None = None) -> tuple[bool, str]:
+def available(model: str | None = None, *, timeout: float = 8.0) -> tuple[bool, str]:
     if not config.LLM_ENABLED:
         return False, "LLM_ENABLED=false"
     needed = [model] if model else [m for m in (config.notes_model(), config.LLM_SYNTHESIS_MODEL) if m]
     if not needed:
         return False, "no LLM model configured (student/search tags are reserved)"
     try:
-        r = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=8.0,
+        r = httpx.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=timeout,
                       headers={"User-Agent": config.USER_AGENT})
         r.raise_for_status()
         tags = {m.get("name") for m in r.json().get("models") or []}
