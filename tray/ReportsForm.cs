@@ -161,13 +161,15 @@ public sealed class ReportsForm : Form
         {
             if (Directory.Exists(_cfg.OutputFolder))
             {
+                // Raising starts in OnHandleCreated, not here: the tray builds
+                // this form at startup and only shows it on demand, so until
+                // then there is no handle to marshal onto.
                 _watcher = new FileSystemWatcher(_cfg.OutputFolder, "*.md")
                 {
                     IncludeSubdirectories = true,
-                    EnableRaisingEvents = true,
                     NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size
                 };
-                FileSystemEventHandler bump = (_, _) => BeginInvoke(() => { _debounce.Stop(); _debounce.Start(); });
+                FileSystemEventHandler bump = (_, _) => Bump();
                 _watcher.Created += bump;
                 _watcher.Changed += bump;
                 _watcher.Deleted += bump;
@@ -177,6 +179,8 @@ public sealed class ReportsForm : Form
         {
             // Watching is a convenience; the Refresh button is the guarantee.
         }
+        // Normally OnHandleCreated arms it, but that can already have run.
+        if (IsHandleCreated) SetWatching(true);
         _debounce.Tick += (_, _) => { _debounce.Stop(); Reload(); };
 
         FormClosing += (_, e) =>
@@ -187,6 +191,51 @@ public sealed class ReportsForm : Form
         };
 
         Reload();
+    }
+
+    /// <summary>
+    /// Watcher events arrive on thread-pool threads, where anything that
+    /// escapes takes the whole tray down with it. The handle can also go away
+    /// between the check and the call, so the marshal stays guarded too.
+    /// </summary>
+    private void Bump()
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try
+        {
+            BeginInvoke(() => { _debounce.Stop(); _debounce.Start(); });
+        }
+        catch (InvalidOperationException)
+        {
+            // Handle went away mid-marshal (ObjectDisposedException derives
+            // from this one); the Refresh button still works.
+        }
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Only now can Bump marshal, so only now is it safe to listen.
+        SetWatching(true);
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        SetWatching(false);
+        base.OnHandleDestroyed(e);
+    }
+
+    private void SetWatching(bool on)
+    {
+        if (_watcher is null) return;
+        try
+        {
+            _watcher.EnableRaisingEvents = on;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed ahead of the handle teardown; nothing left to arm.
+        }
     }
 
     protected override void OnShown(EventArgs e)
