@@ -116,6 +116,15 @@ teachers, community benchmarks, and the rest.
 
 ## Install
 
+**Windows, packaged:** download
+[**AITeacherRadar.msi**](https://github.com/Orffyrus-Qc/ai-teacher-radar/releases/latest/download/AITeacherRadar.msi)
+from the [latest release](https://github.com/Orffyrus-Qc/ai-teacher-radar/releases/latest)
+and run it. It installs the tray app and the radar's source; Docker Desktop,
+the .NET 9 Desktop Runtime and Ollama are prerequisites you install first — see
+[installer/README.md](installer/README.md).
+
+**From a checkout:**
+
 ```bash
 cd ai-teacher-radar
 cp .env.example .env
