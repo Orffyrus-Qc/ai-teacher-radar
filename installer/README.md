@@ -1,7 +1,7 @@
 # AITeacherRadar.msi
 
 A per-machine Windows installer for the radar and its tray app. Built with
-WiX 5, about **528 KB**.
+WiX 5, about **630 KB**.
 
 ## Build
 
@@ -32,7 +32,7 @@ or from Add/Remove Programs.
 ## What is in the package
 
 The tray app, the radar's Python source, the Dockerfile, `config/*.yaml`, the
-n8n workflow, `docs/TEACHER_MODELS.md` and the scripts — 32 files into
+n8n workflow, `docs/TEACHER_MODELS.md` and the scripts — 57 files into
 `%ProgramFiles%\AI Teacher Radar`, plus Start Menu and desktop shortcuts.
 
 **The 277 MB container image is deliberately not included.** It is built on the

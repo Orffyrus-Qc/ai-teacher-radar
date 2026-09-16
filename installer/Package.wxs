@@ -72,6 +72,7 @@
       <Files Include="..\requirements.txt" />
       <Files Include="..\.env.example" />
       <Files Include="..\README.md" />
+      <Files Include="..\LICENSE" />
     </ComponentGroup>
 
     <ComponentGroup Id="PythonApp" Directory="INSTALLFOLDER" Subdirectory="app">
