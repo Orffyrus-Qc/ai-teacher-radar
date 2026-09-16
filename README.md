@@ -38,6 +38,12 @@ Noise / off-list → Source health**. A `*-search.json` sidecar sits next to
 each Markdown brief (url, license, params, fitness, buckets, role,
 `output_learning_allowed`) so Borg can ingest structured items.
 
+> **What is Borg?** A separate, private project on the same machine: a local
+> LoRA-training pipeline that consumes those sidecars and keeps a few Ollama
+> models (`qwen3.5:9b`, `borg-search:*`) resident for itself. It is not part
+> of this repository. Wherever the code or a commit says "Borg reserves" a
+> model, read it as "another GPU tenant this radar must not step on".
+
 The *Teacher-model watch* section is the point of the whole thing: new Hugging
 Face models scored **0–10 for teacher fitness**, with a VRAM plan at fp16/Q8/Q5/Q4
 and a verdict like *"runs at Q4 on the 16 GB card"*. See
@@ -280,3 +286,7 @@ Put a read-only PAT in `GITHUB_TOKEN` to get 30.
 **Empty briefs** — lower `SCORE_THRESHOLD` or raise `LOOKBACK_HOURS`. Check
 `/latest` for the *Source health* section; a feed that changed its URL shows up
 there as `✗`.
+
+## License
+
+[MIT](LICENSE).
